@@ -1,15 +1,28 @@
+/**
+ *  File Rock Paper Scissors game 
+ * 
+ *  Authors: Isaac Draper, Ben Brenkman
+ *  Email:   fuzeplay@timpanogos-tech.com
+ * 
+ *  Purpose: This is the rock paper scissors implementation on the FuzePlay zubi board
+ *  You will need to boards and three wires to connect the two boards together
+ *  One wire to connect both grounds together, Another to connect one boards TX pin to the other boards RX pin,
+ *  And another to connect the remaining RX pin to the other boards TX pin.
+ * 
+ **/
+
 #include <FastLED.h>
 #include <Bounce2.h>
 enum state {CONN, SUCCESS, WARNING, PLAY};
 state status = CONN;
 enum RESULT {TIE, WIN, LOSE, NA};
 enum BUTTON {TRIANGLE, CIRCLE, SQUARE, NONE};
-// Initialize LED's
+//---------------------Initialize LED's, Don't change these -------------------------
 #define NUMBER_OF_LEDS 6
 #define DATA_PIN 16 //Serial Data output (don't change this)
 #define CLOCK_PIN 15 //Serial Clock output (don't change this)
 CRGB leds[NUMBER_OF_LEDS];
-//Buttons, Don't change these
+//---------------------Buttons, Don't change these-----------------------------------
 //This sets which pins in your Fuze board are connected to each button
 //Since these are constants (they can't be changed), they are written in UPPER CASE
 #define BUTTON_ONE_PIN 7
@@ -18,6 +31,7 @@ CRGB leds[NUMBER_OF_LEDS];
 #define BUTTON_TRIANGLE_PIN 10
 #define BUTTON_CIRCLE_PIN 2
 #define BUTTON_SQUARE_PIN 8
+//-----------------------------------------------------------------------------------
 //Buzzer, don't change this
 //This sets which pin on your Fuze board are connected to a buzzer
 //Since these are constants (they can't be changed), they are written in UPPER CASE
@@ -27,6 +41,19 @@ CRGB leds[NUMBER_OF_LEDS];
 Bounce triangleDebouncer = Bounce();
 Bounce circleDebouncer = Bounce();
 Bounce squareDebouncer = Bounce();
+
+
+//******************************************************************************
+// User modifiable values
+//******************************************************************************
+int NUMBER_OF_PLAYS = 3;
+int FLASH_CYCLES = 20;
+double INTERVAL_INCREASE = 0.005;
+
+
+// This is the setup function only called once during the program run. 
+// It is called before the loop is called
+// Put initialization code here
 void setup() {
   // put your setup code here, to run once:
   // Initialize FastLED library with our board led's
@@ -47,33 +74,42 @@ void setup() {
   circleDebouncer.attach(BUTTON_CIRCLE_PIN);
   circleDebouncer.interval(DEBOUNCE_INTERVAL);
 }
+
 //Used to clear all the LEDs after a light sequence is complete
 void clearAllLEDs() {
+    // Goes through every led and then sets them to the color black
   for (int i = 0; i < NUMBER_OF_LEDS; i++) {
     leds[i] = CRGB::Black;
   }
-  FastLED.show();
+  FastLED.show(); // Updates the changes so we can see them
 }
 
 
+// This is the loop function.
+// This function is called over and over agian until the end of the program
 void loop() {
   // //Read the latest button states
   triangleDebouncer.update();
   squareDebouncer.update();
   circleDebouncer.update();
 
-  clearAllLEDs();
+  clearAllLEDs(); // Clear LED's
+
+  // This section of code keeps track of the status of the game
+  // There are two statuses
+  // 1. Connecting, this is the waiting peroid, waits until both players are ready
   if (status == CONN) {
     if (connect())
       status = PLAY;
   }
-  for (int i = 0; i < 3; i++) {
-    playGame();
+  for (int i = 0; i < NUMBER_OF_PLAYS; i++) {
+    playGame(); // This plays the game as many times as specified.
   }
   status = CONN;
 }
 
 
+// This is the connect function. Waits until both players are ready.
 bool connect() {
   double count = 0;
   bool isConnected = false;
@@ -82,9 +118,11 @@ bool connect() {
   clearAllLEDs();
   // char recievData = 'N';
   while (!isConnected) {
+      // Update the buttons
     triangleDebouncer.update();
     squareDebouncer.update();
     circleDebouncer.update();
+    // Makes the cool circling blue ring of LED's
     leds[0].setRGB(0, 0, 100 * abs(sin(count + (3.141592659 / 6))));
     leds[1].setRGB(0, 0, 100 * abs(sin(count + (3.141592659 / 3))));
     leds[2].setRGB(0, 0, 100 * abs(sin(count + (3.141592659 / 2))));
@@ -93,17 +131,19 @@ bool connect() {
     leds[5].setRGB(0, 0, 100 * abs(sin(count + (3.141592659))));
     count += 0.005;
     FastLED.show();
+    // Check to see if the triangle button was pressed
     if (triangleDebouncer.fell() ||
         squareDebouncer.fell() ||
         circleDebouncer.fell()) {
       Serial.println("Fell");
-      Serial1.write('1');
+      Serial1.write('1'); // Send the number '1' to the other board.
       isDown = true;
     }
     if (triangleDebouncer.rose()) {
       isDown = false;
     }
     int i = 0;
+    // If the other board is trying to send something back see what message it is trying to send
     if (Serial1.available()) {
       int i = 0;
       int recievData;
@@ -113,7 +153,7 @@ bool connect() {
         i++;
       }
 
-      if (i > 0 && isDown && str[0] == '1') {
+      if (i > 0 && isDown && str[0] == '1') { // If this board recieved the message down and the triangle button is pressed, send '1' to the other board
         isConnected = true;
         Serial.println("Recieved connecting... ");
         Serial.println(str[0]);
@@ -122,13 +162,13 @@ bool connect() {
       }
     }
   }
-  connectSuccess();
+  connectSuccess(); // Once both players are ready flash green
   return true;
 }
 
 
 
-
+// Flashes the LED's green to indicate both players are ready
 void connectSuccess() {
   clearAllLEDs();
   for (double i = 0; i < 15; i += 0.01) {
@@ -143,7 +183,7 @@ void connectSuccess() {
   clearAllLEDs();
 }
 
-
+// Sets all the LED's a specific color
 void setAllLEDs(int r, int g, int b) {
   for (int i = 0; i < NUMBER_OF_LEDS; i++) {
     leds[i].setRGB(r, g, b);
@@ -151,8 +191,9 @@ void setAllLEDs(int r, int g, int b) {
   FastLED.show();
 }
 
-void flashAllLEDs(int r, int g, int b, double times = 15) {
-  for (double T = 0; T < times; T += 0.01) {
+// Flash the LED's a specific color
+void flashAllLEDs(int r, int g, int b, double times = FLASH_CYCLES) {
+  for (double T = 0; T < times; T += INTERVAL_INCREASE) {
     for (int i = 0; i < NUMBER_OF_LEDS; i++) {
       leds[i].setRGB(r * abs(sin(T)), g * abs(sin(T)), b * abs(sin(T)));
     }
@@ -162,12 +203,7 @@ void flashAllLEDs(int r, int g, int b, double times = 15) {
 }
 
 
-
-
-
-
-
-
+// Plays the game
 void playGame() {
   bool inGame = true;
   bool isDown = false;
@@ -288,7 +324,7 @@ void playGame() {
 
 
 
-
+// Displays the result of the game
 void showResult(RESULT re, BUTTON btn) {
   char str[1];
   Serial.println("BTN:");
@@ -340,23 +376,3 @@ void showResult(RESULT re, BUTTON btn) {
   delay(1000);
   clearAllLEDs();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
